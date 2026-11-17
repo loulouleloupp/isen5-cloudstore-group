@@ -1,0 +1,279 @@
+{
+  "apiVersion": 1,
+  "muteTimes": [
+    {
+      "orgId": 1,
+      "name": "service-d-no-delivery",
+      "time_intervals": [
+        {
+          "times": [
+            {
+              "start_time": "00:00",
+              "end_time": "24:00"
+            }
+          ],
+          "location": "UTC"
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "Service D demo SLO",
+      "folder": "Service D",
+      "interval": "30s",
+      "rules": [
+        {
+          "uid": "service-d-unavailable",
+          "title": "Service D unavailable",
+          "condition": "C",
+          "for": "2m",
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "isPaused": false,
+          "labels": {
+            "service": "service-d-payment",
+            "scope": "demo-slo"
+          },
+          "annotations": {
+            "summary": "Scrape HTTP indisponible ou cible absente pendant 2 minutes.",
+            "description": "Objectif de démonstration à ajuster avec le professeur. Notifications toujours muettes pour le Service D.",
+            "__dashboardUid__": "cloudstore-service-d",
+            "__panelId__": "8"
+          },
+          "notification_settings": {
+            "receiver": "${SERVICE_D_ALERT_RECEIVER}",
+            "mute_time_intervals": [
+              "service-d-no-delivery"
+            ]
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "${SERVICE_D_PROMETHEUS_UID}",
+              "model": {
+                "refId": "A",
+                "expr": "(min(up{job=\"service-d-payment\"}) or vector(0)) < bool 1",
+                "instant": true,
+                "range": false,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    },
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.5
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "service-d-technical-errors",
+          "title": "Service D technical errors SLO",
+          "condition": "C",
+          "for": "5m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "isPaused": false,
+          "labels": {
+            "service": "service-d-payment",
+            "scope": "demo-slo"
+          },
+          "annotations": {
+            "summary": "Erreurs techniques ≥1% sur 5m, au moins 20 requêtes, pendant 5 minutes.",
+            "description": "Objectif de démonstration à ajuster avec le professeur. Notifications toujours muettes pour le Service D.",
+            "__dashboardUid__": "cloudstore-service-d",
+            "__panelId__": "5"
+          },
+          "notification_settings": {
+            "receiver": "${SERVICE_D_ALERT_RECEIVER}",
+            "mute_time_intervals": [
+              "service-d-no-delivery"
+            ]
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "${SERVICE_D_PROMETHEUS_UID}",
+              "model": {
+                "refId": "A",
+                "expr": "(((sum(increase(http_requests_total{job=\"service-d-payment\",route=\"/payments/charge\",method=\"POST\",status_code=~\"5..\"}[5m])) or vector(0)) / sum(increase(http_requests_total{job=\"service-d-payment\",route=\"/payments/charge\",method=\"POST\"}[5m]))) and on() (sum(increase(http_requests_total{job=\"service-d-payment\",route=\"/payments/charge\",method=\"POST\"}[5m])) >= 20)) >= bool 0.01",
+                "instant": true,
+                "range": false,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    },
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.5
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "service-d-latency-p95",
+          "title": "Service D latency p95 SLO",
+          "condition": "C",
+          "for": "5m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "isPaused": false,
+          "labels": {
+            "service": "service-d-payment",
+            "scope": "demo-slo"
+          },
+          "annotations": {
+            "summary": "p95 paiement ≥500ms sur 5m, au moins 20 requêtes, pendant 5 minutes.",
+            "description": "Objectif de démonstration à ajuster avec le professeur. Notifications toujours muettes pour le Service D.",
+            "__dashboardUid__": "cloudstore-service-d",
+            "__panelId__": "3"
+          },
+          "notification_settings": {
+            "receiver": "${SERVICE_D_ALERT_RECEIVER}",
+            "mute_time_intervals": [
+              "service-d-no-delivery"
+            ]
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 300,
+                "to": 0
+              },
+              "datasourceUid": "${SERVICE_D_PROMETHEUS_UID}",
+              "model": {
+                "refId": "A",
+                "expr": "((histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"service-d-payment\",route=\"/payments/charge\",method=\"POST\"}[5m])))) and on() (sum(increase(http_requests_total{job=\"service-d-payment\",route=\"/payments/charge\",method=\"POST\"}[5m])) >= 20)) >= bool 0.5",
+                "instant": true,
+                "range": false,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            },
+            {
+              "refId": "C",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "datasource": {
+                  "type": "__expr__",
+                  "uid": "__expr__"
+                },
+                "conditions": [
+                  {
+                    "type": "query",
+                    "query": {
+                      "params": [
+                        "C"
+                      ]
+                    },
+                    "reducer": {
+                      "type": "last",
+                      "params": []
+                    },
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.5
+                      ]
+                    },
+                    "operator": {
+                      "type": "and"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
