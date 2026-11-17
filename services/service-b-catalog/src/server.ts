@@ -1,3 +1,4 @@
+import './instrumentation';
 import pino from 'pino';
 import * as client from 'prom-client';
 import { trace, context } from '@opentelemetry/api';

@@ -21,4 +21,9 @@ COPY --from=builder /app/dist ./dist
 
 EXPOSE 8082
 
+# Send traces and logs to the collector in gRPC, the protocol of port 4317
+ENV OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+# Metrics are exposed on /metrics with prom-client, not pushed by OpenTelemetry
+ENV OTEL_METRICS_EXPORTER=none
+
 CMD ["node", "dist/server.js"]
