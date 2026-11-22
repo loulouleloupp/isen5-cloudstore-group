@@ -1,3 +1,4 @@
+
 import express, { Request, Response, NextFunction } from 'express';
 import http from 'http';
 import cors from 'cors';
@@ -37,6 +38,7 @@ function httpJson(
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     };
+
     if (payload) {
       headers['Content-Length'] = Buffer.byteLength(payload).toString();
     }
@@ -51,14 +53,17 @@ function httpJson(
       },
       (res) => {
         let raw = '';
+
         res.on('data', (chunk) => (raw += chunk));
         res.on('end', () => {
           let data: any = {};
+
           try {
             data = raw ? JSON.parse(raw) : {};
           } catch {
             data = { raw };
           }
+
           const status = res.statusCode || 500;
           resolve({ ok: status >= 200 && status < 300, status, data });
         });
@@ -73,6 +78,7 @@ function httpJson(
 
 app.use((req: Request, res: Response, next: NextFunction) => {
   if (req.path === '/metrics') return next();
+
   const end = httpRequestDuration.startTimer();
 
   res.on('finish', () => {
@@ -81,6 +87,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
       route: req.route ? req.route.path : 'unmatched',
       status_code: String(res.statusCode),
     };
+
     httpRequestsTotal.inc(labels);
     end(labels);
 
@@ -138,10 +145,16 @@ app.post(
     }
 
     for (const item of items) {
-      if (!item.product_id || typeof item.quantity !== 'number' || item.quantity <= 0) {
+      if (
+        !item ||
+        typeof item.product_id !== 'string' ||
+        !item.product_id ||
+        !Number.isSafeInteger(item.quantity) ||
+        item.quantity <= 0
+      ) {
         return res.status(400).json({
           error: 'Bad Request',
-          message: 'Each item must have a valid product_id and a positive quantity',
+          message: 'Each item must have a valid product_id and a positive integer quantity',
           status_code: 400,
         });
       }
@@ -152,14 +165,18 @@ app.post(
     try {
       // 1. Auth verification
       let authHeader = req.headers.authorization;
+
       if (!authHeader) {
         const match = /^USER-(\d+)$/i.exec(user_id);
+
         if (match) {
           const num = match[1];
+
           const loginRes = await httpJson(`${AUTH_SERVICE_URL}/auth/login`, {
             method: 'POST',
             body: { username: `user${num}`, password: `password${num}` },
           });
+
           if (loginRes.ok && loginRes.data?.token) {
             authHeader = `Bearer ${loginRes.data.token}`;
           }
@@ -179,7 +196,48 @@ app.post(
         });
       }
 
-      // 2. Inventory reservation
+      // 2. Get real prices from catalog
+      const catalogRes = await httpJson(`${CATALOG_SERVICE_URL}/products`);
+
+      if (!catalogRes.ok || !Array.isArray(catalogRes.data)) {
+        return res.status(502).json({
+          error: 'Bad Gateway',
+          message: 'Cannot get product prices',
+          status_code: 502,
+        });
+      }
+
+      let totalCents = 0;
+
+      for (const item of items) {
+        const product = catalogRes.data.find(
+          (p: any) => p.id === item.product_id
+        );
+
+        if (
+          !product ||
+          !Number.isSafeInteger(product.price_cents) ||
+          product.price_cents <= 0
+        ) {
+          return res.status(400).json({
+            error: 'Bad Request',
+            message: 'Invalid product or price',
+            status_code: 400,
+          });
+        }
+
+        totalCents += product.price_cents * item.quantity;
+
+        if (!Number.isSafeInteger(totalCents)) {
+          return res.status(400).json({
+            error: 'Bad Request',
+            message: 'Invalid order total',
+            status_code: 400,
+          });
+        }
+      }
+
+      // 3. Inventory reservation
       const inventoryRes = await httpJson(`${CATALOG_SERVICE_URL}/inventory/reserve`, {
         method: 'POST',
         body: { user_id, items },
@@ -194,14 +252,18 @@ app.post(
       }
 
       reservationId = inventoryRes.data?.reservation_id;
-      const totalCents =
-        typeof inventoryRes.data?.total_cents === 'number' && inventoryRes.data.total_cents > 0
-          ? inventoryRes.data.total_cents
-          : items.reduce((sum, item) => sum + item.quantity * 1000, 0);
 
-      // 3. Payment charge
+      if (!reservationId) {
+        return res.status(502).json({
+          error: 'Bad Gateway',
+          message: 'Missing reservation ID',
+          status_code: 502,
+        });
+      }
+
+      // 4. Payment charge
       const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      const idempotencyKey = reservationId || orderId;
+      const idempotencyKey = reservationId;
 
       const paymentRes = await httpJson(`${PAYMENT_SERVICE_URL}/payments/charge`, {
         method: 'POST',
@@ -213,15 +275,17 @@ app.post(
       });
 
       if (!paymentRes.ok) {
-        if (reservationId) {
-          try {
-            await httpJson(`${CATALOG_SERVICE_URL}/inventory/release`, {
-              method: 'POST',
-              body: { reservation_id: reservationId },
-            });
-          } catch (comptError) {
-            console.error(`[${SERVICE_NAME}] Error during inventory release:`, comptError);
+        try {
+          const releaseRes = await httpJson(`${CATALOG_SERVICE_URL}/inventory/release`, {
+            method: 'POST',
+            body: { reservation_id: reservationId },
+          });
+
+          if (!releaseRes.ok) {
+            console.error(`[${SERVICE_NAME}] Inventory release failed: HTTP ${releaseRes.status}`);
           }
+        } catch (compError) {
+          console.error(`[${SERVICE_NAME}] Error during inventory release:`, compError);
         }
 
         return res.status(402).json({
@@ -244,10 +308,14 @@ app.post(
 
       if (reservationId) {
         try {
-          await httpJson(`${CATALOG_SERVICE_URL}/inventory/release`, {
+          const releaseRes = await httpJson(`${CATALOG_SERVICE_URL}/inventory/release`, {
             method: 'POST',
             body: { reservation_id: reservationId },
           });
+
+          if (!releaseRes.ok) {
+            console.error(`[${SERVICE_NAME}] Secondary compensation failed: HTTP ${releaseRes.status}`);
+          }
         } catch (releaseError) {
           console.error(`[${SERVICE_NAME}] Secondary compensation failure:`, releaseError);
         }
@@ -255,7 +323,7 @@ app.post(
 
       return res.status(500).json({
         error: 'Internal Server Error',
-        message: err.message || 'An unexpected error occurred during the checkout process',
+        message: 'An unexpected error occurred during the checkout process',
         status_code: 500,
       });
     }
