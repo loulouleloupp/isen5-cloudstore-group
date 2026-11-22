@@ -16,7 +16,7 @@ services:
     networks:
       - cloudstore-net
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/health"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -35,7 +35,7 @@ services:
     networks:
       - cloudstore-net
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8082/health"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -61,7 +61,7 @@ services:
     networks:
       - cloudstore-net
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8083/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8083/health"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -80,7 +80,7 @@ services:
     networks:
       - cloudstore-net
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8084/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8084/health"]
       interval: 10s
       timeout: 3s
       retries: 3
